@@ -1,0 +1,19 @@
+# sprites are made on your own computer by tools/fetch_sprites.py (CC BY-NC, Nintendo IP): never commit them
+tools/sdcard/
+tools/pmd_cache/
+wearos/app/src/main/assets/mons/
+garmin/resources-sprites/*
+!garmin/resources-sprites/sprites.xml
+garmin/source/SpriteIds.mc.generated
+
+# build output
+**/build/
+.gradle/
+local.properties
+*.iml
+.idea/
+garmin/bin/
+*.prg
+*.iq
+developer_key*
+__pycache__/
