@@ -2,9 +2,7 @@
 tools/sdcard/
 tools/pmd_cache/
 wearos/app/src/main/assets/mons/
-garmin/resources-sprites/*
-!garmin/resources-sprites/sprites.xml
-garmin/source/SpriteIds.mc.generated
+garmin/sprites/*.png
 
 # build output
 **/build/

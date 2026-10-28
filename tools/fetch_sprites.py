@@ -12,7 +12,7 @@ computer, the same way TamaPoke asks its users to.
 
 Writes:
   wearos/app/src/main/assets/mons/   pNNN.bin, psNNN.bin, thumbs.bin
-  garmin/resources-sprites/          small PNGs for the Garmin build
+  garmin/sprites/                    PNG strips + SpriteIds.mc for the Garmin build
 """
 import os
 import shutil

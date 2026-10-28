@@ -1,0 +1,5 @@
+project.manifest = manifest.xml
+# sprites/ holds the personal-use sprites made by tools/fetch_sprites.py
+# (placeholders when they haven't been fetched)
+base.sourcePath = source;sprites
+base.resourcePath = resources;sprites
