@@ -14,6 +14,7 @@ import android.view.View
 import com.pokewatch.game.*
 import java.util.TimeZone
 import kotlin.math.abs
+import kotlin.math.PI
 import kotlin.math.cos
 import kotlin.math.sin
 import kotlin.math.sqrt
@@ -28,9 +29,12 @@ private const val HORIZON = 232
 private const val BTN_HALF = 26
 private const val BTN_HIT = 36
 
-private const val STARTER_ROW_Y = 110
-private const val STARTER_ROW_H = 70
-private const val STARTER_ROW_GAP = 8
+private const val STARTER_GROUND = 318
+private const val STARTER_ARROW_X = 52
+private const val STARTER_ARROW_Y = 250
+private const val STARTER_BTN_W = 120
+private const val STARTER_BTN_H = 52
+private const val STARTER_BTN_Y = 392
 private const val EVO_BTN_W = 256
 private const val EVO_BTN_H = 64
 private const val EVO_BTN_X = CX - EVO_BTN_W / 2
@@ -164,6 +168,10 @@ class GameView(
     private var holdFired = false
 
     private var gNight = false
+    private var starterSel = 0
+    private var starterHopAt = 0L
+    private var starterPmd: Art.MonCache? = null
+    private var starterPmdFor = 0
     private var wasEvoReady = false
     private var wasRunReady = false
     private var lastClock = 0L
@@ -325,7 +333,7 @@ class GameView(
         if (e.action == MotionEvent.ACTION_SCROLL && e.isFromSource(InputDevice.SOURCE_ROTARY_ENCODER)) {
             val v = -e.getAxisValue(MotionEvent.AXIS_SCROLL)
             val dir = if (v > 0) -1 else 1
-            if ((galleryOpen && galleryDetail == 0) || cardOpen) onSwipe(dir)
+            if ((galleryOpen && galleryDetail == 0) || cardOpen || pet.awaitingStarter()) onSwipe(dir)
             invalidate()
             return true
         }
@@ -368,7 +376,7 @@ class GameView(
     }
 
     private fun onSwipe(dir: Int) {
-        if (pet.awaitingStarter()) return
+        if (pet.awaitingStarter()) { starterStep(-dir); return }
         if (gameOpen || kbOpen || settingsOpen) return
         if (cardOpen) {
             val p = cardPage + if (dir > 0) -1 else 1
@@ -398,17 +406,7 @@ class GameView(
     }
 
     private fun onTap(x: Int, y: Int) {
-        if (pet.awaitingStarter()) {
-            for (i in 0 until 3) {
-                val ry = STARTER_ROW_Y + i * (STARTER_ROW_H + STARTER_ROW_GAP)
-                if (x in 70..396 && y in ry..ry + STARTER_ROW_H) {
-                    pet.chooseStarter(STARTER_DEX[i])
-                    sfxPlay(Sfx.TAP)
-                    break
-                }
-            }
-            return
-        }
+        if (pet.awaitingStarter()) { starterTap(x, y); return }
         if (galleryOpen) { galleryTap(x, y); return }
         if (kbOpen) { keyboardTap(x, y); return }
         if (settingsOpen) { settingsTap(x, y); return }
@@ -581,21 +579,116 @@ class GameView(
         g.fillCircle(CX, CY, 231, Ui.BG_DAY)
     }
 
-    private fun renderStarterSelect() {
-        roundBg()
-        val t = T(S.CHOOSE_STARTER)
-        g.textColor = Ui.INK
-        g.setSize(2); g.setCur(g.centerX(t, 2), 68); g.print(t)
-        for (i in 0 until 3) {
-            val d = STARTER_DEX[i]
-            val acc = DexTables.ACCENT[d]
-            val ry = STARTER_ROW_Y + i * (STARTER_ROW_H + STARTER_ROW_GAP)
-            g.fillRoundRect(70, ry, 326, STARTER_ROW_H, 14, lerpColor(acc, Ui.WHITE, 6, 8))
-            g.drawRoundRect(70, ry, 326, STARTER_ROW_H, 14, acc)
-            thumbs?.get(d)?.let { drawThumb(it, 76, ry - 5, 3, false) }
-            g.textColor = Ui.INK
-            g.setSize(3); g.setCur(178, ry + 24); g.print(dexName(d))
+    // ---- starter choice: one starter at a time in its home biome ----
+    private fun starterStep(dir: Int) {
+        starterSel = (starterSel + dir + 3) % 3
+        starterHopAt = millis()
+        sfxPlay(Sfx.TAP)
+    }
+
+    private fun starterTap(x: Int, y: Int) {
+        if (abs(y - STARTER_ARROW_Y) < 50 && x < STARTER_ARROW_X + 48) { starterStep(-1); return }
+        if (abs(y - STARTER_ARROW_Y) < 50 && x > 466 - STARTER_ARROW_X - 48) { starterStep(1); return }
+        if (abs(x - CX) < STARTER_BTN_W / 2 + 10 && y in STARTER_BTN_Y - 10..STARTER_BTN_Y + STARTER_BTN_H + 10) {
+            pet.chooseStarter(STARTER_DEX[starterSel])
+            starterPmd = null
+            starterPmdFor = 0
+            sfxPlay(Sfx.TAP)
+            return
         }
+        if (abs(x - CX) < 100 && y in 120..STARTER_GROUND + 10) starterHopAt = millis()
+    }
+
+    private fun renderStarterSelect() {
+        val d = STARTER_DEX[starterSel]
+        val acc = DexTables.ACCENT[d]
+        val now = millis()
+        val h = sceneHour()
+        val night = h < 6 || h >= 20
+        g.fillScreen(0xFF000000.toInt())
+        drawScene(DexTables.BIOME[d], now, night)
+
+        // title on a pill, page dots under it
+        val t = T(S.CHOOSE_STARTER)
+        val ts = if (g.textW(t, 2) <= 300) 2 else 1
+        val tw = g.textW(t, ts) + 36
+        g.fillRoundRect(CX - tw / 2, 40, tw, 40, 20, Ui.WHITE)
+        g.textColor = Ui.INK
+        g.setSize(ts); g.setCur(g.centerX(t, ts), if (ts == 2) 54 else 57); g.print(t)
+        for (i in 0 until 3) {
+            val dx = CX - 22 + i * 22
+            g.fillCircle(dx, 98, if (i == starterSel) 8 else 6, if (i == starterSel) acc else Ui.INK)
+            g.fillCircle(dx, 98, if (i == starterSel) 4 else 3, Ui.WHITE)
+        }
+
+        // the starter: a little hop when it comes on stage or is tapped
+        val ht = now - starterHopAt
+        val hop = if (ht in 0..359) (sin(ht * PI / 360) * 26).toInt() else 0
+        val shadowW = 120 - hop * 2
+        val soil = BIOME_SOIL[DexTables.BIOME[d]]
+        g.fillRoundRect(CX - shadowW / 2, STARTER_GROUND - 8, shadowW, 16, 8,
+            lerpColor(soil, 0xFF000000.toInt(), if (night) 10 else 5, 16))
+        drawStarterMon(d, STARTER_GROUND - hop, now)
+
+        // arrows
+        for (side in intArrayOf(-1, 1)) {
+            val ax = if (side < 0) STARTER_ARROW_X else 466 - STARTER_ARROW_X
+            g.fillCircle(ax, STARTER_ARROW_Y, 26, Ui.WHITE)
+            g.fillTriangle(ax + 9 * side, STARTER_ARROW_Y, ax - 7 * side, STARTER_ARROW_Y - 13,
+                ax - 7 * side, STARTER_ARROW_Y + 13, acc)
+        }
+
+        // name on the starter's colour
+        val nm = dexName(d)
+        val ns = if (g.textW(nm, 3) <= 260) 3 else 2
+        val nw = g.textW(nm, ns) + 44
+        g.fillRoundRect(CX - nw / 2, 332, nw, 46, 23, acc)
+        g.textColor = Ui.WHITE
+        g.setSize(ns); g.setCur(g.centerX(nm, ns), if (ns == 3) 343 else 347); g.print(nm)
+
+        // confirm: a white pill with a check
+        val bx = CX - STARTER_BTN_W / 2
+        g.fillRoundRect(bx, STARTER_BTN_Y + 4, STARTER_BTN_W, STARTER_BTN_H, 26, lerpColor(acc, 0xFF000000.toInt(), 5, 16))
+        g.fillRoundRect(bx, STARTER_BTN_Y, STARTER_BTN_W, STARTER_BTN_H, 26, Ui.WHITE)
+        drawCheck(CX, STARTER_BTN_Y + STARTER_BTN_H / 2, acc)
+    }
+
+    private fun drawStarterMon(d: Int, groundY: Int, now: Long) {
+        if (starterPmdFor != d) {
+            starterPmdFor = d
+            starterPmd = loadMon(d, false)
+        }
+        val m = starterPmd
+        val a = m?.mon?.acts?.get(PMD_IDLE)
+        if (m != null && a != null) {
+            // bigger than on the main screen: it's the star of this one
+            val s = (240 / a.h).coerceIn(3, 7)
+            g.drawBitmap(m.frame(PMD_IDLE, a.frameAt(now, true), false),
+                CX - a.w * s / 2, groundY - a.base * s, a.w * s, a.h * s)
+            return
+        }
+        val t = thumbs?.get(d)
+        if (t != null) {
+            g.drawBitmap(Art.thumb(t, false), CX - t.w * 2, groundY - t.h * 4, t.w * 4, t.h * 4)
+            return
+        }
+        // no sprites installed: the built-in pixel art, blinking now and then
+        val sp = SpriteTables.FLASH[d - 1]
+        val x = CX - 16 * 5
+        val y = groundY - 30 * 5
+        drawMap(sp.sprite, x, y, 5, false)
+        if (now % 3500 < 300) {
+            overlayEye(sp, x, y, 5, sp.eyeL)
+            overlayEye(sp, x, y, 5, sp.eyeR)
+        }
+    }
+
+    private fun drawCheck(cx: Int, cy: Int, col: Int) {
+        // two thick strokes: short down-right, long up-right
+        g.fillTriangle(cx - 22, cy - 2, cx - 14, cy - 10, cx - 4, cy + 14, col)
+        g.fillTriangle(cx - 14, cy - 10, cx + 4, cy + 4, cx - 4, cy + 14, col)
+        g.fillTriangle(cx - 4, cy + 14, cx - 4, cy - 2, cx + 20, cy - 20, col)
+        g.fillTriangle(cx - 4, cy + 14, cx + 20, cy - 20, cx + 26, cy - 12, col)
     }
 
     // =====================================================================
