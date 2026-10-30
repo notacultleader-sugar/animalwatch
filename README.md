@@ -5,6 +5,7 @@ ESP32 round display) ported to smartwatches:
 
 - **Wear OS** (Samsung Galaxy Watch 4 and newer, Pixel Watch, any round Wear OS 3+ watch): `wearos/`
 - **Garmin Connect IQ** (Fenix 7/8, Epix 2, Forerunner 255/265/955/965, Venu 2/3, Vivoactive 5): `garmin/`
+- **Apple Watch** (watchOS 10+, SwiftUI): `watchos/`, see [watchos/README.md](watchos/README.md)
 
 The gameplay, screens and flow follow TamaPoke v1.18: egg and starter choice,
 hunger/joy/energy/hygiene, poops, sleep and lights, berries and candy, the ball
@@ -17,7 +18,8 @@ the farewell / runaway / release endings.
 The code is MIT. The Pokémon sprites are not included: they're fan-made
 (PMD SpriteCollab, CC BY-NC 4.0) and Pokémon is Nintendo's. Like TamaPoke,
 you download them on your own computer, and the build you make is for your own
-watch. Don't publish it on the Play Store or the Connect IQ Store.
+watch. Don't publish it on the Play Store, the Connect IQ Store or the App Store
+(the Apple Watch build goes out through TestFlight internal testing or Ad Hoc only).
 
 ```sh
 pip install pillow
@@ -25,8 +27,8 @@ python3 tools/fetch_sprites.py            # all 151 (takes a few minutes)
 python3 tools/fetch_sprites.py 1 4 7 25   # or just a few, for a quick test
 ```
 
-This fills `wearos/app/src/main/assets/mons/` and `garmin/sprites/`. Without
-sprites both apps still run and show a "?" where the Pokémon would be.
+This fills `wearos/app/src/main/assets/mons/`, `watchos/mons/` and `garmin/sprites/`. Without
+sprites the apps still run and show a "?" where the Pokémon would be.
 `python3 tools/garmin_sprites.py --empty` puts the Garmin placeholders back.
 
 ## Wear OS
@@ -79,6 +81,8 @@ silhouette.
 | `wearos/game` | Game logic (Kotlin, port of `pet.cpp`) with tests |
 | `wearos/app` | Watch UI (port of `TamaPoke.ino`), Canvas-drawn at 466×466 and scaled |
 | `garmin/source` | Monkey C port of the same game and UI |
+| `watchos/` | Swift/SwiftUI port of the same game and UI, with tests |
+| `codemagic.yaml` | Codemagic build of the Apple Watch app to TestFlight |
 | `tools/gen_tables.py` | Generates species/text tables for both apps from TamaPoke's sources |
 | `tools/pack_pmd.py`, `make_thumbs.py` | TamaPoke's sprite packers (MIT) |
 | `tools/fetch_sprites.py`, `garmin_sprites.py` | Personal sprite download and conversion |

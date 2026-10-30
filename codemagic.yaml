@@ -1,0 +1,63 @@
+# Codemagic: builds the Apple Watch app and sends it to TestFlight for
+# internal testing only (no App Store listing, no Beta App Review).
+# One-time setup is in watchos/README.md.
+workflows:
+  watchos-testflight:
+    name: Apple Watch to TestFlight
+    instance_type: mac_mini_m2
+    max_build_duration: 60
+    # Start it by hand from Codemagic. To build on every push to main, add:
+    #   triggering:
+    #     events: [push]
+    #     branch_patterns: [{ pattern: main }]
+    integrations:
+      # the name you gave your App Store Connect API key in Codemagic
+      # (Team settings > Team integrations > Developer Portal)
+      app_store_connect: PokeWatch ASC key
+    environment:
+      xcode: latest
+      ios_signing:
+        # Ad Hoc instead of TestFlight: change this to ad_hoc (and see the
+        # publishing section below)
+        distribution_type: app_store
+        bundle_identifier: com.notacultleader.pokewatch
+      vars:
+        XCODE_PROJECT: watchos/PokeWatch.xcodeproj
+        XCODE_SCHEME: PokeWatch
+        # the app's numeric Apple ID: App Store Connect > the app > App Information
+        APP_STORE_APPLE_ID: "0000000000"
+    scripts:
+      - name: Download the sprites (never committed; for this private build only)
+        script: |
+          pip3 install --user pillow
+          python3 tools/fetch_sprites.py
+      - name: Generate the Xcode project
+        script: |
+          brew install xcodegen
+          cd watchos && xcodegen
+      - name: Game logic tests
+        script: |
+          UDID=$(xcrun simctl list devices available -j | python3 -c "import json,sys; d=json.load(sys.stdin)['devices']; print(next(x['udid'] for k,v in d.items() if 'watchOS' in k for x in v))")
+          xcodebuild test -project "$XCODE_PROJECT" -scheme "$XCODE_SCHEME" -destination "id=$UDID" CODE_SIGNING_ALLOWED=NO
+      - name: Signing
+        script: xcode-project use-profiles --project "$XCODE_PROJECT"
+      - name: Archive and export
+        script: |
+          LATEST=$(app-store-connect get-latest-testflight-build-number "$APP_STORE_APPLE_ID" 2>/dev/null || echo 0)
+          BUILD_NUMBER=$((LATEST + 1))
+          xcodebuild archive -project "$XCODE_PROJECT" -scheme "$XCODE_SCHEME" -configuration Release \
+            -destination "generic/platform=watchOS" -archivePath build/PokeWatch.xcarchive \
+            CURRENT_PROJECT_VERSION="$BUILD_NUMBER"
+          xcodebuild -exportArchive -archivePath build/PokeWatch.xcarchive \
+            -exportOptionsPlist "$HOME/export_options.plist" -exportPath build/ipa
+    artifacts:
+      - build/ipa/*.ipa
+    publishing:
+      app_store_connect:
+        auth: integration
+        submit_to_testflight: true
+        # internal testers only: leave beta_groups out so nothing is sent to
+        # Beta App Review. Add the internal group by name if you made one:
+        # beta_groups: [Friends]
+      # Ad Hoc: delete the app_store_connect block above. The .ipa is then just
+      # a build artifact to download from Codemagic (or add an email: block).

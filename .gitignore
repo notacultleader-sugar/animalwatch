@@ -2,6 +2,8 @@
 tools/sdcard/
 tools/pmd_cache/
 wearos/app/src/main/assets/mons/
+watchos/mons/*
+!watchos/mons/README.md
 garmin/sprites/*.png
 
 # build output
@@ -15,3 +17,10 @@ garmin/bin/
 *.iq
 developer_key*
 __pycache__/
+
+# Apple Watch: the Xcode project is generated from watchos/project.yml by XcodeGen
+watchos/PokeWatch.xcodeproj/
+watchos/build/
+DerivedData/
+*.ipa
+*.xcarchive
