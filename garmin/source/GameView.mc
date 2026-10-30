@@ -18,9 +18,12 @@ const PET_GROUND = 304;
 const HORIZON = 232;
 const BTN_HALF = 26;
 const BTN_HIT = 36;
-const STARTER_ROW_Y = 110;
-const STARTER_ROW_H = 70;
-const STARTER_ROW_GAP = 8;
+const STARTER_GROUND = 318;
+const STARTER_ARROW_X = 52;
+const STARTER_ARROW_Y = 250;
+const STARTER_BTN_W = 120;
+const STARTER_BTN_H = 52;
+const STARTER_BTN_Y = 392;
 const EVO_BTN_W = 256;
 const EVO_BTN_H = 64;
 const EVO_BTN_X = 105;
@@ -69,7 +72,8 @@ class GameView extends WatchUi.View {
     var confirmUntil = 0;
     var choiceKind = 0;
     private var choiceUntil = 0;
-    private var starterSel = 1;
+    private var starterSel = 0;
+    private var starterHopAt = 0;
 
     // minigame
     var gameOpen = false;
@@ -309,7 +313,7 @@ class GameView extends WatchUi.View {
     }
 
     function swipe(dir as Number) as Void {
-        if (pet.awaitingStarter()) { return; }
+        if (pet.awaitingStarter()) { starterStep(-dir); return; }
         if (gameOpen || settingsOpen) { return; }
         if (cardOpen) {
             var p = cardPage + (dir > 0 ? -1 : 1);
@@ -348,17 +352,7 @@ class GameView extends WatchUi.View {
     }
 
     function tap(x as Number, y as Number) as Void {
-        if (pet.awaitingStarter()) {
-            for (var i = 0; i < 3; i++) {
-                var ry = STARTER_ROW_Y + i * (STARTER_ROW_H + STARTER_ROW_GAP);
-                if (x >= 70 && x <= 396 && y >= ry && y <= ry + STARTER_ROW_H) {
-                    pet.chooseStarter(STARTER_DEX[i]);
-                    sfxPlay(G.SFX_TAP);
-                    break;
-                }
-            }
-            return;
-        }
+        if (pet.awaitingStarter()) { starterTap(x, y); return; }
         if (galleryOpen) { galleryTap(x, y); return; }
         if (settingsOpen) { settingsTap(x, y); return; }
         if (pet.ceremony != G.CER_NONE) { return; }
@@ -493,8 +487,7 @@ class GameView extends WatchUi.View {
     // SELECT: confirm / hit; returns false when the main menu should open
     function keySelect() as Boolean {
         if (pet.awaitingStarter()) {
-            pet.chooseStarter(STARTER_DEX[starterSel]);
-            sfxPlay(G.SFX_TAP);
+            starterChoose();
             return true;
         }
         if (sackOpen) { sackTap(); return true; }
@@ -537,7 +530,7 @@ class GameView extends WatchUi.View {
     // UP / DOWN: dir -1 = up, +1 = down
     function keyPage(dir as Number) as Boolean {
         if (pet.awaitingStarter()) {
-            starterSel = (starterSel + dir + 3) % 3;
+            starterStep(dir);
             return true;
         }
         if (feedMenuUntil != 0) {
@@ -776,21 +769,95 @@ class GameView extends WatchUi.View {
         }
     }
 
-    private function renderStarterSelect() as Void {
-        roundBg();
-        centered(T(Str.CHOOSE_STARTER), 2, 68, Ui.INK);
-        for (var i = 0; i < 3; i++) {
-            var d = STARTER_DEX[i];
-            var acc = Tables.ACCENT[d];
-            var ry = STARTER_ROW_Y + i * (STARTER_ROW_H + STARTER_ROW_GAP);
-            g.fillRoundRect(70, ry, 326, STARTER_ROW_H, 14, Ui.lerp(acc, Ui.WHITE, 6, 8));
-            g.drawRoundRect(70, ry, 326, STARTER_ROW_H, 14, acc);
-            if (i == starterSel) {
-                g.drawRoundRect(66, ry - 4, 334, STARTER_ROW_H + 8, 16, Ui.INK);
-            }
-            drawThumb(d, 76, ry - 5);
-            text(dexName(d), 3, 178, ry + 24, Ui.INK);
+    // ---- starter choice: one starter at a time in its home biome ----
+    private function starterStep(dir as Number) as Void {
+        g.forget(strips[STARTER_DEX[starterSel]]);
+        starterSel = (starterSel + dir + 3) % 3;
+        starterHopAt = G.millis();
+        sfxPlay(G.SFX_TAP);
+    }
+
+    private function starterChoose() as Void {
+        var d = STARTER_DEX[starterSel];
+        g.forget(strips[d]);
+        g.forget(thumbIds[d]);
+        pet.chooseStarter(d);
+        sfxPlay(G.SFX_TAP);
+    }
+
+    private function starterTap(x as Number, y as Number) as Void {
+        var ay = (y - STARTER_ARROW_Y).abs() < 50;
+        if (ay && x < STARTER_ARROW_X + 48) { starterStep(-1); return; }
+        if (ay && x > 466 - STARTER_ARROW_X - 48) { starterStep(1); return; }
+        if ((x - CX).abs() < STARTER_BTN_W / 2 + 10 && y >= STARTER_BTN_Y - 10 && y <= STARTER_BTN_Y + STARTER_BTN_H + 10) {
+            starterChoose();
+            return;
         }
+        if ((x - CX).abs() < 100 && y >= 120 && y <= STARTER_GROUND + 10) { starterHopAt = G.millis(); }
+    }
+
+    private function renderStarterSelect() as Void {
+        var d = STARTER_DEX[starterSel];
+        var acc = Tables.ACCENT[d];
+        var now = G.millis();
+        var h = sceneHour();
+        var night = h < 6 || h >= 20;
+        drawScene(Tables.BIOME[d], now, night);
+
+        // title on a pill, page dots under it
+        var t = T(Str.CHOOSE_STARTER);
+        var ts = g.textW(t, 2) <= 300 ? 2 : 1;
+        var tw = g.textW(t, ts) + 36;
+        g.fillRoundRect(CX - tw / 2, 40, tw, 40, 20, Ui.WHITE);
+        text(t, ts, g.centerX(t, ts), ts == 2 ? 54 : 57, Ui.INK);
+        for (var i = 0; i < 3; i++) {
+            var dx = CX - 22 + i * 22;
+            g.fillCircle(dx, 98, i == starterSel ? 8 : 6, i == starterSel ? acc : Ui.INK);
+            g.fillCircle(dx, 98, i == starterSel ? 4 : 3, Ui.WHITE);
+        }
+
+        // the starter: a little hop when it comes on stage or is tapped
+        var ht = now - starterHopAt;
+        var hop = (ht >= 0 && ht < 360) ? (Math.sin(ht * Math.PI / 360) * 26).toNumber() : 0;
+        var shadowW = 120 - hop * 2;
+        var soil = BIOME_SOIL[Tables.BIOME[d]];
+        g.fillRoundRect(CX - shadowW / 2, STARTER_GROUND - 8, shadowW, 16, 8, Ui.lerp(soil, 0, night ? 10 : 5, 16));
+        if (strips[d] != null) {
+            drawMon(d, CX, STARTER_GROUND - hop, now, true);
+        } else if (thumbIds[d] != null) {
+            g.drawBitmap(thumbIds[d], CX - SpriteIds.TW[d] / 2, STARTER_GROUND - hop - SpriteIds.TH[d]);
+        } else {
+            centered("?", 7, STARTER_GROUND - hop - 120, Ui.WHITE);
+        }
+
+        // arrows
+        for (var side = -1; side <= 1; side += 2) {
+            var ax = side < 0 ? STARTER_ARROW_X : 466 - STARTER_ARROW_X;
+            g.fillCircle(ax, STARTER_ARROW_Y, 26, Ui.WHITE);
+            g.fillTriangle(ax + 9 * side, STARTER_ARROW_Y, ax - 7 * side, STARTER_ARROW_Y - 13,
+                ax - 7 * side, STARTER_ARROW_Y + 13, acc);
+        }
+
+        // name on the starter's colour
+        var nm = dexName(d);
+        var ns = g.textW(nm, 3) <= 260 ? 3 : 2;
+        var nw = g.textW(nm, ns) + 44;
+        g.fillRoundRect(CX - nw / 2, 332, nw, 46, 23, acc);
+        text(nm, ns, g.centerX(nm, ns), ns == 3 ? 343 : 347, Ui.WHITE);
+
+        // confirm: a white pill with a check
+        var bx = CX - STARTER_BTN_W / 2;
+        g.fillRoundRect(bx, STARTER_BTN_Y + 4, STARTER_BTN_W, STARTER_BTN_H, 26, Ui.lerp(acc, 0, 5, 16));
+        g.fillRoundRect(bx, STARTER_BTN_Y, STARTER_BTN_W, STARTER_BTN_H, 26, Ui.WHITE);
+        drawCheck(CX, STARTER_BTN_Y + STARTER_BTN_H / 2, acc);
+    }
+
+    private function drawCheck(cx as Number, cy as Number, col as Number) as Void {
+        // two thick strokes: short down-right, long up-right
+        g.fillTriangle(cx - 22, cy - 2, cx - 14, cy - 10, cx - 4, cy + 14, col);
+        g.fillTriangle(cx - 14, cy - 10, cx + 4, cy + 4, cx - 4, cy + 14, col);
+        g.fillTriangle(cx - 4, cy + 14, cx - 4, cy - 2, cx + 20, cy - 20, col);
+        g.fillTriangle(cx - 4, cy + 14, cx + 20, cy - 20, cx + 26, cy - 12, col);
     }
 
     // ------------------------------------------------------------------
