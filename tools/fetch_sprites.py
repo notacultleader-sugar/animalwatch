@@ -12,6 +12,7 @@ computer, the same way TamaPoke asks its users to.
 
 Writes:
   wearos/app/src/main/assets/mons/   pNNN.bin, psNNN.bin, thumbs.bin
+  watchos/mons/                      the same files for the Apple Watch build
   garmin/sprites/                    PNG strips + SpriteIds.mc for the Garmin build
 """
 import os
@@ -23,6 +24,7 @@ TOOLS = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(TOOLS)
 PACKED = os.path.join(TOOLS, 'sdcard', 'mons')
 WEAR = os.path.join(ROOT, 'wearos', 'app', 'src', 'main', 'assets', 'mons')
+WATCH = os.path.join(ROOT, 'watchos', 'mons')
 
 
 def main():
@@ -31,13 +33,14 @@ def main():
     # thumbnails need every packed file that exists; missing ones are skipped
     subprocess.run([sys.executable, os.path.join(TOOLS, 'make_thumbs.py')], check=True)
 
-    os.makedirs(WEAR, exist_ok=True)
-    n = 0
-    for name in sorted(os.listdir(PACKED)):
-        if name.endswith('.bin'):
-            shutil.copy2(os.path.join(PACKED, name), os.path.join(WEAR, name))
-            n += 1
-    print(f'Wear OS: copied {n} files to {os.path.relpath(WEAR, ROOT)}')
+    for label, dest in (('Wear OS', WEAR), ('Apple Watch', WATCH)):
+        os.makedirs(dest, exist_ok=True)
+        n = 0
+        for name in sorted(os.listdir(PACKED)):
+            if name.endswith('.bin'):
+                shutil.copy2(os.path.join(PACKED, name), os.path.join(dest, name))
+                n += 1
+        print(f'{label}: copied {n} files to {os.path.relpath(dest, ROOT)}')
 
     garmin = os.path.join(TOOLS, 'garmin_sprites.py')
     if os.path.exists(garmin):

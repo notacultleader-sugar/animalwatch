@@ -1,0 +1,58 @@
+# XcodeGen spec for the Apple Watch app. The .xcodeproj is generated, not
+# committed:  brew install xcodegen && cd watchos && xcodegen
+name: PokeWatch
+options:
+  deploymentTarget:
+    watchOS: "10.0"
+  developmentLanguage: en
+settings:
+  base:
+    SWIFT_VERSION: "5.0"
+    MARKETING_VERSION: "1.0"
+    CURRENT_PROJECT_VERSION: "1"
+    # Change this to an ID of your own if it's taken; it must match the
+    # App Store Connect app record and BUNDLE_ID in codemagic.yaml.
+    PRODUCT_BUNDLE_IDENTIFIER: com.notacultleader.pokewatch
+targets:
+  PokeWatch:
+    type: application
+    platform: watchOS
+    sources:
+      - path: PokeWatch
+        excludes:
+          - Info.plist
+      - path: Game
+      # the sprites folder, filled by tools/fetch_sprites.py (never committed)
+      - path: mons
+        type: folder
+        buildPhase: resources
+    settings:
+      base:
+        INFOPLIST_FILE: PokeWatch/Info.plist
+        GENERATE_INFOPLIST_FILE: NO
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        TARGETED_DEVICE_FAMILY: "4"
+        CODE_SIGN_STYLE: Automatic
+        ENABLE_PREVIEWS: NO
+  PokeWatchTests:
+    type: bundle.unit-test
+    platform: watchOS
+    sources:
+      - path: Game
+      - path: Tests
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: YES
+        PRODUCT_BUNDLE_IDENTIFIER: com.notacultleader.pokewatch.tests
+        CODE_SIGN_STYLE: Automatic
+schemes:
+  PokeWatch:
+    build:
+      targets:
+        PokeWatch: all
+        PokeWatchTests: [test]
+    test:
+      targets:
+        - PokeWatchTests
+    archive:
+      config: Release

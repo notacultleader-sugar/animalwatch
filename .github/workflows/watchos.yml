@@ -1,0 +1,29 @@
+# Compile check for the Apple Watch app on pull requests: generates the Xcode
+# project, runs the game logic tests in the watch simulator and builds the app
+# for a device without signing. No sprites, no secrets, nothing uploaded.
+name: watchOS
+on:
+  pull_request:
+    paths:
+      - watchos/**
+      - tools/gen_tables.py
+      - .github/workflows/watchos.yml
+  workflow_dispatch:
+jobs:
+  build:
+    runs-on: macos-15
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - name: Generate the Xcode project
+        run: |
+          brew install xcodegen
+          cd watchos && xcodegen
+      - name: Game logic tests
+        run: |
+          UDID=$(xcrun simctl list devices available -j | python3 -c "import json,sys; d=json.load(sys.stdin)['devices']; print(next(x['udid'] for k,v in d.items() if 'watchOS' in k for x in v))")
+          xcodebuild test -project watchos/PokeWatch.xcodeproj -scheme PokeWatch -destination "id=$UDID" CODE_SIGNING_ALLOWED=NO
+      - name: Build for a device (unsigned)
+        run: |
+          xcodebuild build -project watchos/PokeWatch.xcodeproj -scheme PokeWatch -configuration Release \
+            -destination "generic/platform=watchOS" CODE_SIGNING_ALLOWED=NO
